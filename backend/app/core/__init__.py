@@ -1,0 +1,3 @@
+"""
+Studable API — Core package.
+"""
