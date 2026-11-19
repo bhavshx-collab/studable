@@ -28,6 +28,11 @@ htmlcov/
 # Alembic compiled
 alembic/__pycache__/
 
+# SQLite local development databases
+*.db
+*.sqlite
+*.sqlite3
+
 # IDE
 .vscode/
 .idea/

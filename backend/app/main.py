@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
 
 from app.core.config import settings
 from app.core.redis import close_redis_pool
@@ -42,6 +44,16 @@ async def on_shutdown() -> None:
     """Gracefully close long-lived connections on shutdown."""
     await close_redis_pool()
     logger.info("Studable API shutdown complete.")
+
+
+# ── Exception handlers ────────────────────────────────────────────────────────
+@app.exception_handler(OperationalError)
+async def db_operational_error_handler(request: Request, exc: OperationalError) -> JSONResponse:
+    logger.error("Database connection error on %s: %s", request.url.path, exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database service is temporarily unavailable. Please verify database connection."},
+    )
 
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
