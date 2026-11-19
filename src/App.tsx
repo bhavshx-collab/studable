@@ -33,6 +33,7 @@ import { StateView } from './components/ui/StateView';
 import { BrowserRouter, useRouter } from './router/Router';
 import { AdminGuard } from './router/AdminGuard';
 import { getMeApi, logoutApi, refreshApi } from './services/authApi';
+import { getLiveOnlineCount, presenceWs } from './services/presenceService';
 
 const VALID_APP_ROUTES: AppRoute[] = [
   'dashboard',
@@ -79,8 +80,8 @@ function AppRoutes() {
   );
   const [inspectedPeer, setInspectedPeer] = useState<UserProfile | null>(null);
 
-  // Strictly null until live WebSocket presence is connected
-  const liveOnlineCount: number | null = null;
+  // Live online user count from Redis presence engine
+  const [liveOnlineCount, setLiveOnlineCount] = useState<number | null>(null);
 
   // Restore authenticated session after refresh if refresh cookie is present
   useEffect(() => {
@@ -90,13 +91,30 @@ function AppRoutes() {
       .then((profile) => {
         if (isMounted && profile) {
           setCurrentUser(profile);
+          presenceWs.connect();
+          getLiveOnlineCount().then((count) => {
+            if (isMounted && count !== null) {
+              setLiveOnlineCount(count);
+            }
+          });
         }
       })
       .catch(() => {
         // No active session — stays as default/guest
       });
+
+    const pollInterval = setInterval(() => {
+      getLiveOnlineCount().then((count) => {
+        if (isMounted && count !== null) {
+          setLiveOnlineCount(count);
+        }
+      });
+    }, 30000);
+
     return () => {
       isMounted = false;
+      clearInterval(pollInterval);
+      presenceWs.disconnect();
     };
   }, []);
 
@@ -208,6 +226,10 @@ function AppRoutes() {
         onComplete={(profile, email) => {
           setCurrentUser(profile);
           setAccountSettings((prev) => ({ ...prev, email }));
+          presenceWs.connect();
+          getLiveOnlineCount().then((count) => {
+            if (count !== null) setLiveOnlineCount(count);
+          });
           navigate('/dashboard');
         }}
       />
@@ -417,7 +439,9 @@ function AppRoutes() {
               setBlockedUsers((prev) => prev.filter((u) => u.id !== userId))
             }
             onLogout={async () => {
+              presenceWs.disconnect();
               await logoutApi();
+              setLiveOnlineCount(null);
               navigate('/');
             }}
           />

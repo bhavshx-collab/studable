@@ -10,8 +10,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.redis import close_redis_pool
 from app.api.routes import health
 from app.api.routes import auth as auth_router
+from app.api.routes import presence as presence_router
+from app.api.websockets import presence_ws
 
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
@@ -31,6 +34,16 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
+# ── Lifespan events ───────────────────────────────────────────────────────────
+
+
+@app.on_event("shutdown")
+async def on_shutdown() -> None:
+    """Gracefully close long-lived connections on shutdown."""
+    await close_redis_pool()
+    logger.info("Studable API shutdown complete.")
+
+
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
@@ -43,6 +56,10 @@ app.add_middleware(
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth_router.router, prefix="/api/v1")
+app.include_router(presence_router.router, prefix="/api/v1")
+
+# ── WebSocket ─────────────────────────────────────────────────────────────────
+app.include_router(presence_ws.router, prefix="/api/v1")
 
 
 # ── Root ─────────────────────────────────────────────────────────────────────

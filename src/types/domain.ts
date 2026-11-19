@@ -16,6 +16,14 @@ export type InterestTag =
 export type MatchingMode = 'random' | 'interest';
 export type AudiencePreference = 'Students' | 'Professionals' | 'Anyone';
 
+export type PresenceStatus =
+  | 'OFFLINE'
+  | 'ONLINE'
+  | 'AVAILABLE'
+  | 'BUSY'
+  | 'MATCHING'
+  | 'IN_CONVERSATION';
+
 export interface UserProfile {
   id: string;
   displayName: string;
@@ -29,6 +37,7 @@ export interface UserProfile {
   connectionCount: number;
   isVerified?: boolean;
   role?: 'member' | 'admin';
+  presenceStatus?: PresenceStatus;
 }
 
 export interface OwnAccountSettings {

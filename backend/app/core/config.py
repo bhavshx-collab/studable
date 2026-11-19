@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     REFRESH_COOKIE_SECURE: bool = False   # Set True in production (HTTPS only)
     REFRESH_COOKIE_SAMESITE: str = "strict"
 
+    # ── Redis / Presence ──────────────────────────────────────────────────────
+    REDIS_URL: str = "redis://localhost:6379/0"
+    # How long (seconds) a presence key survives without a heartbeat.
+    PRESENCE_TTL_SECONDS: int = 60
+    # Client must send a ping this often (seconds) to keep the key alive.
+    PRESENCE_HEARTBEAT_INTERVAL: int = 30
+    # Seconds to wait after last session closes before marking user OFFLINE.
+    PRESENCE_SESSION_CLEANUP_DELAY: int = 5
+
     # ── Admin ─────────────────────────────────────────────────────────────────
     ADMIN_EMAIL: str = "admin@studable.app"
 

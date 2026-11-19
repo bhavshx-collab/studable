@@ -1,5 +1,5 @@
 # PRODUCT ROADMAP — STUDABLE
-> **Status:** Pre-development planning & Phase 0 execution  
+> **Status:** Phases 0, 1, 2, 3, 4 Completed | Phase 5 Pending Approval  
 > **Last updated:** November 2026
 
 ---
@@ -12,38 +12,42 @@ This roadmap defines the development sequence for Studable from its initial fron
 
 ## PHASE BREAKDOWN
 
-### Phase 0 — Frontend Hardening & Clean Baseline (Current)
+### Phase 0 — Frontend Hardening & Clean Baseline (COMPLETED)
 - Complete rebranding from "Valence" to "Studable".
 - Robust HTML5 URL-based routing (direct URL, back/forward, refresh).
 - Removal of visible prototype testing controls from public views.
 - Frontend Admin authorization guard & route isolation.
 - Verification and audit sign-off.
 
-### Phase 1 — Backend Foundation & Authentication
-- FastAPI application scaffolding.
-- PostgreSQL database setup and SQLAlchemy ORM models.
-- JWT authentication with secure cookies, bcrypt password hashing.
-- Register, login, token refresh, and logout endpoints.
-- Frontend auth form wiring and session management.
+### Phase 1 — Backend Foundation (COMPLETED)
+- FastAPI application scaffolding and centralized configuration.
+- PostgreSQL engine & session lifecycle management.
+- Health check endpoints (`/api/v1/health`) with live DB probing.
+- Modular architecture with test suite.
 
-### Phase 2 — User Profiles & Account Settings
-- Profile management APIs (read, update).
-- Avatar upload pipeline (multipart form, storage abstraction).
-- Settings persistence (preferences, languages, topics).
-- Real connection count calculation.
+### Phase 2 & 3 — Database Models & Authentication (COMPLETED)
+- 11 SQLAlchemy 2.0 ORM models covering Users, Auth, Connections, Conversations, Messages, Notifications, Reports, Blocks.
+- Alembic database migration scripts.
+- Argon2id password hashing and JWT access token issuance.
+- Secure HttpOnly refresh token rotation cookies.
+- Role-based authorization gates (`member` / `admin`).
+- Frontend session restore and login/register integration.
 
-### Phase 3 — Connections System
-- Connection request lifecycle (send, accept, reject, remove).
-- Pending and accepted connection lists.
-- Notifications trigger on connection updates.
+### Phase 4 — User Availability & Presence Engine (COMPLETED)
+- Real-time Redis-based presence state machine (`OFFLINE`, `ONLINE`, `AVAILABLE`, `BUSY`, `MATCHING`, `IN_CONVERSATION`).
+- Authenticated WebSocket gateway (`/api/v1/ws/presence`) with heartbeats and connection manager.
+- REST endpoints for presence query, availability listing, and live online user count.
+- Multi-session/device support with sliding TTL.
+- Frontend `presenceService.ts` and UI count integration.
+- Graceful degradation when external services are unavailable.
 
-### Phase 4 — Real-time Matching Engine
+### Phase 5 — Real-time Matching Engine (NEXT)
 - Redis matching queues (Random and Interest-based).
 - Matching worker service and compatibility filtering.
 - WebSocket match proposal distribution.
 - Mutual handshake acceptance protocol.
 
-### Phase 5 — Real-time 1-on-1 Messaging
+### Phase 6 — Real-time 1-on-1 Messaging
 - WebSocket conversation gateway.
 - Real-time message exchange, delivery status, typing indicators.
 - Persistent conversation history in PostgreSQL.
