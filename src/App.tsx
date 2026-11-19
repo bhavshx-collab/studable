@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { AppShell, AppRoute } from './components/layout/AppShell';
 import {
   PROTOTYPE_CONNECTIONS,
@@ -32,6 +32,7 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { StateView } from './components/ui/StateView';
 import { BrowserRouter, useRouter } from './router/Router';
 import { AdminGuard } from './router/AdminGuard';
+import { getMeApi, logoutApi, refreshApi } from './services/authApi';
 
 const VALID_APP_ROUTES: AppRoute[] = [
   'dashboard',
@@ -80,6 +81,24 @@ function AppRoutes() {
 
   // Strictly null until live WebSocket presence is connected
   const liveOnlineCount: number | null = null;
+
+  // Restore authenticated session after refresh if refresh cookie is present
+  useEffect(() => {
+    let isMounted = true;
+    refreshApi()
+      .then(() => getMeApi())
+      .then((profile) => {
+        if (isMounted && profile) {
+          setCurrentUser(profile);
+        }
+      })
+      .catch(() => {
+        // No active session — stays as default/guest
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const currentRouteName = useMemo<AppRoute | null>(() => {
     const segment = pathname.replace(/^\//, '').toLowerCase();
@@ -397,7 +416,10 @@ function AppRoutes() {
             onUnblockUser={(userId) =>
               setBlockedUsers((prev) => prev.filter((u) => u.id !== userId))
             }
-            onLogout={() => navigate('/')}
+            onLogout={async () => {
+              await logoutApi();
+              navigate('/');
+            }}
           />
         )}
       </AppShell>

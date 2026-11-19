@@ -146,13 +146,52 @@ studable-main/
 
 ---
 
-## 6. REMAINING ARCHITECTURAL REQUIREMENTS (PHASES 2-9)
+## 6. PHASE 2 DATABASE MODELS & MIGRATIONS (COMPLETED)
 
-- **Phase 2**: PostgreSQL Database Models & Schemas (User, Profile, Interest, Status).
-- **Phase 3**: User Registration, Authentication (JWT), & Security.
+1. **SQLAlchemy 2.0 ORM Models (11 Relational Entities)**:
+   - `User`, `UserInterest`, `UserSkill`, `UserLanguage` in `app/models/user.py`.
+   - `RefreshToken` in `app/models/auth.py` for token rotation and server-side revocation.
+   - `Connection`, `Conversation`, `Message`, `Notification`, `Report`, and `Block` models matching the `BACKEND_ARCHITECTURE.md` specification.
+   - Configured cascade deletion rules, check constraints (e.g. non-self matching/blocking), and composite indexes for hot-path queries.
+
+2. **Alembic Migration Script**:
+   - Created `20261119_0001_initial_schema.py` creating all 11 tables with foreign keys and indexes.
+   - Validated offline SQL generation (`alembic upgrade head --sql`).
+
+---
+
+## 7. PHASE 3 AUTHENTICATION & AUTHORIZATION (COMPLETED)
+
+1. **Argon2id Hashing & Security**:
+   - Password hashing implemented with Argon2id via `argon2-cffi`. Never stores plaintext passwords.
+   - Timing attack mitigation: executes constant-time dummy verification for unknown emails.
+   - Never exposes password hashes in API response bodies.
+
+2. **JWT & Session Lifecycle**:
+   - Short-lived JWT access tokens (15-min TTL) with `jti` anti-replay entropy and `role` claims.
+   - Opaque refresh tokens stored as SHA-256 digests in PostgreSQL, delivered via HttpOnly, Secure cookies.
+   - Automatic refresh token rotation on `/auth/refresh` and revocation on `/auth/logout`.
+
+3. **Endpoints Implemented**:
+   - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`, `POST /api/v1/auth/change-password`.
+   - Stubs for email verification and password reset.
+
+4. **Frontend Integration**:
+   - Implemented `src/services/authApi.ts` storing access tokens strictly in memory.
+   - Connected `AuthOnboardingPage.tsx` for real login and registration with validation and loading states.
+   - Added automatic silent session restoration and logout in `App.tsx` and `SettingsPage.tsx`.
+
+5. **Test Suite**:
+   - 53 automated pytest tests passing cleanly at 100% in 7.87s.
+   - Frontend passes `npm run lint` (`tsc --noEmit`) with 0 errors and `npm run build` in 2.54s.
+
+---
+
+## 8. REMAINING ARCHITECTURAL REQUIREMENTS (PHASES 4-9)
+
 - **Phase 4**: User Availability & Presence Engine (Redis).
 - **Phase 5**: Matching Engine (Random & Interest-Based).
 - **Phase 6**: Real-time Messaging (WebSockets) & Conversation Management.
 - **Phase 7**: Moderation, Blocking & Reporting.
 - **Phase 8**: Notification System.
-- **Phase 9**: Frontend & Backend Integration.
+- **Phase 9**: End-to-End Frontend & Backend Integration.

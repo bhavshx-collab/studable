@@ -1,11 +1,5 @@
 """
 Studable API — FastAPI application entry point.
-
-Responsibilities:
-- Create and configure the FastAPI app instance.
-- Register CORS middleware.
-- Mount all API routers under versioned prefixes.
-- Expose root and documentation endpoints.
 """
 
 from __future__ import annotations
@@ -17,15 +11,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.api.routes import health
+from app.api.routes import auth as auth_router
 
-# ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(name)s — %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# ── Application ───────────────────────────────────────────────────────────────
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -39,7 +32,6 @@ app = FastAPI(
 )
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
-# Origins are loaded from environment variables — never hardcoded here.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -50,12 +42,12 @@ app.add_middleware(
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(health.router, prefix="/api/v1")
+app.include_router(auth_router.router, prefix="/api/v1")
 
 
 # ── Root ─────────────────────────────────────────────────────────────────────
 @app.get("/", tags=["Root"], summary="API root")
 def root() -> dict:
-    """Returns a friendly message confirming the API is running."""
     return {
         "message": "Studable API is running",
         "version": settings.APP_VERSION,

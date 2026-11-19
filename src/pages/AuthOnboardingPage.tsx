@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, ShieldCheck, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ShieldCheck, Upload, Loader2 } from 'lucide-react';
 import {
   AccountCategory,
   AudiencePreference,
@@ -10,6 +10,12 @@ import {
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Avatar } from '../components/ui/Avatar';
+import {
+  AuthError,
+  getMeApi,
+  loginApi,
+  registerApi,
+} from '../services/authApi';
 
 const ALL_INTERESTS: InterestTag[] = [
   'Technology',
@@ -77,8 +83,9 @@ export const AuthOnboardingPage: React.FC<AuthOnboardingPageProps> = ({
   );
   const [matchingMode, setMatchingMode] = useState<MatchingMode>('interest');
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleAuthSubmit = (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
 
@@ -93,6 +100,10 @@ export const AuthOnboardingPage: React.FC<AuthOnboardingPageProps> = ({
       }
       if (password.length < 8) {
         setAuthError('Password must be at least 8 characters.');
+        return;
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)) {
+        setAuthError('Password must contain at least one uppercase letter, one lowercase letter, and one number.');
         return;
       }
       if (password !== confirmPassword) {
@@ -111,21 +122,64 @@ export const AuthOnboardingPage: React.FC<AuthOnboardingPageProps> = ({
         setAuthError('Enter your email and password to sign in.');
         return;
       }
+
+      setIsSubmitting(true);
+      try {
+        await loginApi({ email: email.trim(), password });
+        const profile = await getMeApi();
+        onComplete(profile, email.trim());
+      } catch (err) {
+        if (err instanceof AuthError) {
+          setAuthError(err.detail);
+        } else {
+          setAuthError('Unable to connect to the authentication server. Please ensure the backend is running.');
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+  };
+
+  const handleCompleteRegistration = async () => {
+    setIsSubmitting(true);
+    setOnboardingError(null);
+
+    try {
+      const rawUsername = (email.split('@')[0] || displayName).replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 30);
+      const username = rawUsername.length >= 3 ? rawUsername : `user_${Date.now().toString().slice(-6)}`;
+
+      const { user: regUser } = await registerApi({
+        username,
+        email: email.trim(),
+        password,
+        displayName: displayName.trim(),
+      });
+
       onComplete(
         {
-          id: 'usr_self',
-          displayName: displayName.trim() || 'Aarav Mehta',
-          category: 'Working Professional',
-          headline: 'Product Engineer · Distributed Systems',
-          bio: 'Returning member ready for thoughtful 1-on-1 conversations.',
-          skills: ['TypeScript', 'Python', 'System Design'],
-          interests: ['Technology', 'AI and Machine Learning', 'Startups'],
-          languages: ['English'],
-          connectionCount: 18,
-          isVerified: true,
+          id: regUser.id,
+          displayName: displayName.trim() || regUser.display_name,
+          avatarUrl,
+          category,
+          headline: headline.trim() || `${category} on Studable`,
+          bio: bio.trim() || 'Curious to exchange ideas and learn from new perspectives.',
+          skills: [],
+          interests,
+          languages: [preferredLanguage],
+          connectionCount: 0,
+          isVerified: false,
+          role: (regUser.role as 'member' | 'admin') || 'member',
         },
         email.trim()
       );
+    } catch (err) {
+      if (err instanceof AuthError) {
+        setOnboardingError(err.detail);
+      } else {
+        setOnboardingError('Unable to connect to the authentication server. Please ensure the backend is running.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -290,8 +344,15 @@ export const AuthOnboardingPage: React.FC<AuthOnboardingPageProps> = ({
                 </>
               )}
 
-              <Button type="submit" className="w-full mt-2">
-                {authMode === 'register' ? 'Create Account' : 'Sign In'}
+              <Button type="submit" className="w-full mt-2" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {authMode === 'register' ? 'Validating...' : 'Signing in...'}
+                  </span>
+                ) : (
+                  authMode === 'register' ? 'Create Account' : 'Sign In'
+                )}
               </Button>
             </form>
 
@@ -655,28 +716,19 @@ export const AuthOnboardingPage: React.FC<AuthOnboardingPageProps> = ({
             ) : (
               <Button
                 type="button"
-                onClick={() =>
-                  onComplete(
-                    {
-                      id: 'usr_self',
-                      displayName: displayName.trim() || 'New Member',
-                      avatarUrl,
-                      category,
-                      headline: headline.trim() || `${category} on Studable`,
-                      bio:
-                        bio.trim() ||
-                        'Curious to exchange ideas and learn from new perspectives.',
-                      skills: [],
-                      interests,
-                      languages: [preferredLanguage],
-                      connectionCount: 0,
-                      isVerified: true,
-                    },
-                    email.trim() || 'member@studable.app'
-                  )
-                }
+                disabled={isSubmitting}
+                onClick={handleCompleteRegistration}
               >
-                Enter Studable <ArrowRight className="h-4 w-4" />
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating account...
+                  </span>
+                ) : (
+                  <>
+                    Enter Studable <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
               </Button>
             )}
           </div>

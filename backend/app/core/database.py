@@ -1,5 +1,5 @@
 """
-Studable API — Database engine, session factory and base model.
+Studable API — Database engine, session factory and declarative base.
 
 Uses SQLAlchemy 2.0 (sync) with psycopg3.
 All models must inherit from Base so Alembic can discover them.
@@ -17,15 +17,20 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+# ── Declarative base ─────────────────────────────────────────────────────────
+class Base(DeclarativeBase):
+    """All ORM models inherit from this base."""
+    pass
+
+
 # ── Engine ───────────────────────────────────────────────────────────────────
-# pool_pre_ping: drops stale connections automatically before each checkout.
-# pool_size / max_overflow: sensible defaults; tune per deployment.
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
-    echo=settings.DEBUG,  # SQL logging only in DEBUG mode
+    echo=settings.DEBUG,
 )
 
 # ── Session factory ──────────────────────────────────────────────────────────
@@ -37,18 +42,9 @@ SessionLocal: sessionmaker[Session] = sessionmaker(
 )
 
 
-# ── Declarative base ─────────────────────────────────────────────────────────
-class Base(DeclarativeBase):
-    """All ORM models inherit from this base."""
-    pass
-
-
 # ── Dependency injection ─────────────────────────────────────────────────────
 def get_db():
-    """
-    FastAPI dependency that yields a database session and ensures it is
-    closed when the request finishes (or raises).
-    """
+    """FastAPI dependency — yields a DB session per request."""
     db = SessionLocal()
     try:
         yield db
@@ -58,10 +54,7 @@ def get_db():
 
 # ── Connectivity check ───────────────────────────────────────────────────────
 def check_db_connection() -> bool:
-    """
-    Returns True if a live connection to PostgreSQL can be established,
-    False otherwise.  Never raises; logs the error instead.
-    """
+    """Returns True if PostgreSQL is reachable. Never raises."""
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
