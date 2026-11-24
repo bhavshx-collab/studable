@@ -8,8 +8,25 @@
 import { PresenceStatus } from '../types/domain';
 import { getAccessToken } from './authApi';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
+// In production on Vercel (or via Vite dev proxy), API routes are served at /api/... on the same origin.
+// In SSR/functions with Vercel service bindings, BACKEND_URL is injected.
+// VITE_API_URL can still override if set explicitly.
+const getApiBaseUrl = (): string => {
+  if (typeof process !== 'undefined' && process.env?.BACKEND_URL) {
+    return process.env.BACKEND_URL.replace(/\/$/, '');
+  }
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL.replace(/\/$/, '');
+  }
+  return '';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+const WS_BASE_URL = API_BASE_URL
+  ? API_BASE_URL.replace(/^http/, 'ws')
+  : (typeof window !== 'undefined'
+      ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+      : 'ws://localhost:8000');
 
 // ── REST API functions ────────────────────────────────────────────────────────
 
