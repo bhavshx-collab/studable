@@ -16,3 +16,4 @@ from app.models.message import Message                                     # noq
 from app.models.notification import Notification                           # noqa: F401
 from app.models.report import Report                                       # noqa: F401
 from app.models.block import Block                                         # noqa: F401
+from app.models.match_request import MatchRequest                          # noqa: F401

@@ -1,5 +1,5 @@
 # PRODUCT ROADMAP — STUDABLE
-> **Status:** Phases 0, 1, 2, 3, 4 Completed | Phase 5 Pending Approval  
+> **Status:** Phases 0, 1, 2, 3, 4, 5 Completed | Phase 6 Pending Approval  
 > **Last updated:** November 2026
 
 ---
@@ -41,13 +41,17 @@ This roadmap defines the development sequence for Studable from its initial fron
 - Frontend `presenceService.ts` and UI count integration.
 - Graceful degradation when external services are unavailable.
 
-### Phase 5 — Real-time Matching Engine (NEXT)
-- Redis matching queues (Random and Interest-based).
-- Matching worker service and compatibility filtering.
-- WebSocket match proposal distribution.
-- Mutual handshake acceptance protocol.
+### Phase 5 — Real-Time Matching Engine (COMPLETED)
+- Redis matching queues (`matching:queue:random` and `matching:queue:interest`).
+- Matching background worker service with distributed concurrency protection (`matching:worker:lock`).
+- Deterministic compatibility scoring algorithm (interests 3x, languages 2x, audience 1.5x, category 1x, wait time bonus).
+- Complete proposal lifecycle: `QUEUED` → `MATCH_FOUND` → `ACCEPTED` / `REJECTED` → `COMPLETED` / `EXPIRED` / `CANCELLED`.
+- Expiring session leases and stale session cleanup (`cleanup_stale_sessions`).
+- Short-lived single-use WebSocket tickets (`POST /api/v1/ws/ticket`) and Redis Pub/Sub multi-worker event routing.
+- Real-time WebSocket matching channel (`/api/v1/ws/matching`) and REST matching endpoints.
+- Frontend `matchingService.ts` and interactive lobby UI integration with countdown and mutual handshake.
 
-### Phase 6 — Real-time 1-on-1 Messaging
+### Phase 6 — Real-time 1-on-1 Messaging (NEXT)
 - WebSocket conversation gateway.
 - Real-time message exchange, delivery status, typing indicators.
 - Persistent conversation history in PostgreSQL.

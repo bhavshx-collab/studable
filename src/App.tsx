@@ -34,6 +34,7 @@ import { BrowserRouter, useRouter } from './router/Router';
 import { AdminGuard } from './router/AdminGuard';
 import { getMeApi, logoutApi, refreshApi } from './services/authApi';
 import { getLiveOnlineCount, presenceWs } from './services/presenceService';
+import { matchingWs } from './services/matchingService';
 
 const VALID_APP_ROUTES: AppRoute[] = [
   'dashboard',
@@ -92,6 +93,7 @@ function AppRoutes() {
         if (isMounted && profile) {
           setCurrentUser(profile);
           presenceWs.connect();
+          matchingWs.connect();
           getLiveOnlineCount().then((count) => {
             if (isMounted && count !== null) {
               setLiveOnlineCount(count);
@@ -115,6 +117,7 @@ function AppRoutes() {
       isMounted = false;
       clearInterval(pollInterval);
       presenceWs.disconnect();
+      matchingWs.disconnect();
     };
   }, []);
 

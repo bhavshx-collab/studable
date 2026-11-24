@@ -20,6 +20,14 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Avatar } from '../components/ui/Avatar';
 import { StateView } from '../components/ui/StateView';
+import {
+  acceptMatchProposal,
+  cancelMatchingQueue,
+  getMatchStatus,
+  joinMatchingQueue,
+  matchingWs,
+  rejectMatchProposal,
+} from '../services/matchingService';
 
 const INTEREST_OPTIONS: InterestTag[] = [
   'Technology',
@@ -70,15 +78,74 @@ export const ConnectLobbyPage: React.FC<ConnectLobbyPageProps> = ({
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('dev_flow') === '1';
 
-  // Automatically progress from queuing to match_found in prototype demonstration mode
+  // Listen to live WebSocket events from the real-time matching engine
   useEffect(() => {
-    if (matchState === 'queuing') {
+    // Check initial match status on mount
+    getMatchStatus().then((statusData) => {
+      if (statusData && statusData.status === 'MATCH_FOUND' && statusData.peer) {
+        setProposal({
+          matchId: statusData.match_id,
+          peer: statusData.peer,
+          topic: statusData.peer.headline || 'Spontaneous Networking Session',
+          mode: statusData.mode || 'random',
+          expiresAtIso: statusData.expires_at || new Date(Date.now() + 30000).toISOString(),
+          selfAccepted: !!statusData.self_accepted,
+          peerAccepted: !!statusData.peer_accepted,
+          score: statusData.score,
+        });
+        setMatchState(statusData.self_accepted ? 'awaiting_peer_acceptance' : 'match_found');
+      } else if (statusData && statusData.status === 'QUEUED') {
+        setMatchState('queuing');
+      }
+    });
+
+    const unsub = matchingWs.onEvent((event) => {
+      if (event.type === 'matching.found') {
+        setProposal({
+          matchId: event.match_id,
+          peer: event.peer,
+          topic: event.peer?.headline || activeTopic || 'Spontaneous Networking Session',
+          mode: event.mode || 'random',
+          expiresAtIso: event.expires_at || new Date(Date.now() + 30000).toISOString(),
+          selfAccepted: false,
+          peerAccepted: false,
+          score: event.score,
+        });
+        setMatchState('match_found');
+      } else if (event.type === 'matching.accepted') {
+        setProposal((prev) => (prev ? { ...prev, selfAccepted: true } : prev));
+      } else if (event.type === 'matching.peer_accepted') {
+        setProposal((prev) => (prev ? { ...prev, peerAccepted: true } : prev));
+      } else if (event.type === 'matching.completed') {
+        if (event.peer || proposal?.peer) {
+          onEnterChat(event.peer || proposal?.peer, activeTopic || 'Spontaneous Networking Session');
+        }
+      } else if (event.type === 'matching.rejected') {
+        setProposal(null);
+        setMatchState('idle');
+      } else if (event.type === 'matching.expired') {
+        setProposal(null);
+        setMatchState('timeout');
+      } else if (event.type === 'matching.cancelled') {
+        setProposal(null);
+        setMatchState('idle');
+      }
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [activeTopic, onEnterChat, proposal?.peer]);
+
+  // Dev testing simulation only when dev_flow=1 is explicitly requested
+  useEffect(() => {
+    if (isDevTestingEnabled && matchState === 'queuing') {
       const timer = setTimeout(() => {
         setMatchState('match_found');
       }, 2500);
       return () => clearTimeout(timer);
     }
-  }, [matchState]);
+  }, [isDevTestingEnabled, matchState]);
 
   useEffect(() => {
     setRandomAudience(defaultAudience);
@@ -95,37 +162,57 @@ export const ConnectLobbyPage: React.FC<ConnectLobbyPageProps> = ({
     );
   };
 
-  const startMatching = (mode: 'random' | 'interest') => {
+  const startMatching = async (mode: 'random' | 'interest') => {
     const chosenTopic =
       mode === 'random'
         ? `Spontaneous Conversation · ${randomAudience}`
         : topic.trim() || selectedInterests.join(', ') || 'General Discussion';
 
-    const matchedPeer =
-      mode === 'random' && randomAudience === 'Professionals'
-        ? prototypePeers[0]
-        : prototypePeers[1] ?? prototypePeers[0];
-
     setActiveTopic(chosenTopic);
     setMatchState('queuing');
-    setProposal({
-      matchId: `match_proto_${Date.now()}`,
-      peer: matchedPeer,
-      topic: chosenTopic,
-      mode,
-      expiresAtIso: new Date(Date.now() + 30000).toISOString(),
-      selfAccepted: false,
-      peerAccepted: false,
-    });
+
+    try {
+      await joinMatchingQueue(mode);
+    } catch {
+      // In dev testing mode with dev_flow=1, fall back to mock peer if backend is offline
+      if (isDevTestingEnabled) {
+        const matchedPeer =
+          mode === 'random' && randomAudience === 'Professionals'
+            ? prototypePeers[0]
+            : prototypePeers[1] ?? prototypePeers[0];
+        setProposal({
+          matchId: `match_proto_${Date.now()}`,
+          peer: matchedPeer,
+          topic: chosenTopic,
+          mode,
+          expiresAtIso: new Date(Date.now() + 30000).toISOString(),
+          selfAccepted: false,
+          peerAccepted: false,
+        });
+      } else {
+        setMatchState('error');
+      }
+    }
   };
 
-  const handleAcceptMatch = () => {
+  const handleAcceptMatch = async () => {
     if (!proposal) return;
-    setProposal({ ...proposal, selfAccepted: true });
-    setMatchState('awaiting_peer_acceptance');
+    try {
+      await acceptMatchProposal(proposal.matchId);
+      setProposal({ ...proposal, selfAccepted: true });
+      setMatchState('awaiting_peer_acceptance');
+    } catch {
+      setProposal({ ...proposal, selfAccepted: true });
+      setMatchState('awaiting_peer_acceptance');
+    }
   };
 
-  const handleDeclineMatch = () => {
+  const handleDeclineMatch = async () => {
+    if (proposal) {
+      await rejectMatchProposal(proposal.matchId).catch(() => {});
+    } else if (matchState === 'queuing') {
+      await cancelMatchingQueue().catch(() => {});
+    }
     setProposal(null);
     setMatchState('idle');
   };

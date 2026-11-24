@@ -88,6 +88,10 @@ def _sessions_key(user_id: str) -> str:
     return f"presence:user:{user_id}:sessions"
 
 
+def _session_lease_key(session_id: str) -> str:
+    return f"presence:session:{session_id}:lease"
+
+
 # ── Core presence operations ───────────────────────────────────────────────────
 
 
@@ -187,18 +191,21 @@ async def register_session(
     """
     Add *session_id* to the user's active session set and set state to ONLINE.
 
-    If the user is already in a non-OFFLINE state, preserve that state (re-entry).
+    Also sets an expiring session lease key to guard against crashed sessions.
+    If the user is already in a non-OFFLINE state (e.g. MATCHING), preserve that state.
     """
     try:
         effective_ttl = ttl if ttl is not None else settings.PRESENCE_TTL_SECONDS
         await redis.sadd(_sessions_key(user_id), session_id)
+        # Set per-session lease with TTL
+        await redis.set(_session_lease_key(session_id), user_id, ex=effective_ttl)
 
         current = await get_presence(redis, user_id)
         if current == PresenceStatus.OFFLINE:
             # First session — go ONLINE.
             await set_presence(redis, user_id, PresenceStatus.ONLINE, ttl=effective_ttl)
         else:
-            # Additional session — refresh TTL without changing state.
+            # Additional session or re-entry — refresh TTL without clobbering active state.
             await redis.expire(_state_key(user_id), effective_ttl)
         return True
     except RedisError as exc:
@@ -212,12 +219,13 @@ async def unregister_session(
     session_id: str,
 ) -> bool:
     """
-    Remove *session_id* from the user's active session set.
+    Remove *session_id* from the user's active session set and delete its lease.
 
     If no sessions remain, mark the user OFFLINE (remove state key).
     Returns True if the user is now offline, False if sessions remain.
     """
     try:
+        await redis.delete(_session_lease_key(session_id))
         await redis.srem(_sessions_key(user_id), session_id)
         remaining = await redis.scard(_sessions_key(user_id))
         if remaining == 0:
@@ -238,7 +246,7 @@ async def refresh_ttl(
     ttl: Optional[int] = None,
 ) -> bool:
     """
-    Heartbeat handler: refresh the TTL on the state key.
+    Heartbeat handler: refresh the TTL on the state key and session lease key.
 
     Returns True if the session is still active, False if it's unknown.
     """
@@ -247,11 +255,45 @@ async def refresh_ttl(
         is_member = await redis.sismember(_sessions_key(user_id), session_id)
         if not is_member:
             return False
+        await redis.set(_session_lease_key(session_id), user_id, ex=effective_ttl)
         await redis.expire(_state_key(user_id), effective_ttl)
         return True
     except RedisError as exc:
         logger.warning("Redis error in refresh_ttl for %s/%s: %s", user_id, session_id, exc)
         return False
+
+
+async def cleanup_stale_sessions(redis: Redis, user_id: str) -> int:
+    """
+    Clean up expired session leases for *user_id*.
+
+    If any session in the sessions set lacks an active lease key, remove it.
+    If no valid sessions remain, mark user OFFLINE.
+    Returns the number of pruned stale sessions.
+    """
+    try:
+        sessions = await redis.smembers(_sessions_key(user_id))
+        if not sessions:
+            return 0
+
+        pruned = 0
+        for sid in sessions:
+            if isinstance(sid, bytes):
+                sid = sid.decode("utf-8")
+            lease_exists = await redis.exists(_session_lease_key(sid))
+            if not lease_exists:
+                await redis.srem(_sessions_key(user_id), sid)
+                pruned += 1
+
+        remaining = await redis.scard(_sessions_key(user_id))
+        if remaining == 0:
+            await redis.delete(_sessions_key(user_id))
+            await set_presence(redis, user_id, PresenceStatus.OFFLINE)
+
+        return pruned
+    except RedisError as exc:
+        logger.warning("Redis error in cleanup_stale_sessions for %s: %s", user_id, exc)
+        return 0
 
 
 async def get_session_count(redis: Redis, user_id: str) -> int:

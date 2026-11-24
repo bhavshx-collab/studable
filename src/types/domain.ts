@@ -61,6 +61,16 @@ export type MatchLifecycleState =
   | 'timeout'
   | 'error';
 
+export type MatchRequestStatus =
+  | 'IDLE'
+  | 'QUEUED'
+  | 'MATCH_FOUND'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'CANCELLED'
+  | 'EXPIRED'
+  | 'COMPLETED';
+
 export interface MatchProposal {
   matchId: string;
   peer: UserProfile;
@@ -69,6 +79,8 @@ export interface MatchProposal {
   expiresAtIso: string;
   selfAccepted: boolean;
   peerAccepted: boolean;
+  score?: number;
+  conversationId?: string;
 }
 
 export interface ChatMessage {

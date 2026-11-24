@@ -32,7 +32,7 @@ import json
 import logging
 import secrets
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from jose import JWTError
@@ -43,6 +43,7 @@ from app.core.redis import get_redis
 from app.core.security import decode_access_token
 from app.services.presence_service import (
     PresenceStatus,
+    cleanup_stale_sessions,
     get_presence,
     refresh_ttl,
     register_session,
@@ -100,20 +101,38 @@ def _error(code: str, detail: str) -> dict:
 @router.websocket("/ws/presence")
 async def presence_websocket(
     websocket: WebSocket,
-    token: str = Query(..., description="JWT access token"),
+    ticket: Optional[str] = Query(None, description="Short-lived opaque WS ticket"),
+    token: Optional[str] = Query(None, description="JWT access token (fallback)"),
     redis: Redis = Depends(get_redis),
 ) -> None:
     """
     Real-time presence WebSocket.
 
-    Authenticate with ``?token=<access_token>``.
+    Authenticate with ``?ticket=<ticket>`` (preferred) or ``?token=<access_token>`` (legacy/test).
     """
     # ── 1. Authenticate ───────────────────────────────────────────────────────
-    try:
-        payload = decode_access_token(token)
-        user_id: str = payload["sub"]
-    except Exception:  # decode_access_token raises HTTPException, catch all
-        await websocket.close(code=1008, reason="Invalid or expired token")
+    user_id: Optional[str] = None
+    if ticket:
+        try:
+            cached_uid = await redis.get(f"ws:ticket:{ticket}")
+            if cached_uid:
+                if isinstance(cached_uid, bytes):
+                    cached_uid = cached_uid.decode("utf-8")
+                user_id = cached_uid
+                # Single-use: delete immediately
+                await redis.delete(f"ws:ticket:{ticket}")
+        except Exception as exc:
+            logger.warning("Redis error checking ticket: %s", exc)
+
+    if not user_id and token:
+        try:
+            payload = decode_access_token(token)
+            user_id = payload.get("sub")
+        except Exception:
+            user_id = None
+
+    if not user_id:
+        await websocket.close(code=1008, reason="Invalid or expired ticket/token")
         return
 
     # ── 2. Accept connection ──────────────────────────────────────────────────
@@ -122,6 +141,8 @@ async def presence_websocket(
 
     # ── 3. Register session in Redis ──────────────────────────────────────────
     await register_session(redis, user_id, session_id)
+    # Clean up any stale sessions left over from crashed tabs/devices
+    await cleanup_stale_sessions(redis, user_id)
     manager.add(user_id, session_id, websocket)
 
     current_status = await get_presence(redis, user_id)
@@ -133,7 +154,38 @@ async def presence_websocket(
     })
     logger.info("WS presence connected: user=%s session=%s", user_id, session_id)
 
-    # ── 4. Message loop ───────────────────────────────────────────────────────
+    # ── 4. Pub/Sub listener for multi-worker event delivery ───────────────────
+    pubsub_task: Optional[asyncio.Task] = None
+
+    async def _pubsub_forwarder():
+        pubsub = redis.pubsub()
+        channel = f"channel:user:{user_id}"
+        try:
+            await pubsub.subscribe(channel)
+            async for message in pubsub.listen():
+                if message and message.get("type") == "message":
+                    raw_data = message.get("data")
+                    if isinstance(raw_data, bytes):
+                        raw_data = raw_data.decode("utf-8")
+                    if raw_data:
+                        await websocket.send_text(raw_data)
+        except asyncio.CancelledError:
+            pass
+        except Exception as p_exc:
+            logger.debug("PubSub forwarder ended for user %s: %s", user_id, p_exc)
+        finally:
+            try:
+                await pubsub.unsubscribe(channel)
+                await pubsub.close()
+            except Exception:
+                pass
+
+    try:
+        pubsub_task = asyncio.create_task(_pubsub_forwarder())
+    except Exception as exc:
+        logger.warning("Could not start PubSub listener for user %s: %s", user_id, exc)
+
+    # ── 5. Message loop ───────────────────────────────────────────────────────
     try:
         while True:
             try:
@@ -208,7 +260,10 @@ async def presence_websocket(
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("WS presence unexpected error: user=%s: %s", user_id, exc)
     finally:
-        # ── 5. Clean up ───────────────────────────────────────────────────────
+        # Cancel Pub/Sub task
+        if pubsub_task and not pubsub_task.done():
+            pubsub_task.cancel()
+        # ── 6. Clean up ───────────────────────────────────────────────────────
         manager.remove(user_id, session_id)
         went_offline = await unregister_session(redis, user_id, session_id)
         if went_offline:

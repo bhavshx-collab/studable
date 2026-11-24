@@ -10,8 +10,28 @@ Before starting, ensure your system has:
 
 - **Python 3.13+**: [Download Python](https://www.python.org/downloads/) (ensure "Add Python to PATH" is checked on Windows)
 - **pip**: Bundled with Python (`pip --version`)
-- **PostgreSQL 15+**: [Download PostgreSQL](https://www.postgresql.org/download/) (Required for live persistent database operations)
+- **PostgreSQL 15+** or **Docker**: [Download Docker](https://www.docker.com/) to run PostgreSQL 16 and Redis 7 with zero installation
+- **Redis 7+** (or Docker)
 - **Git**
+
+---
+
+## 1.1 Local Development with Docker Compose (Recommended)
+
+To spin up local PostgreSQL and Redis services in seconds:
+
+```bash
+docker compose up -d
+```
+
+This starts:
+- `postgres:16-alpine` on `localhost:5432` (`user=postgres`, `password=postgres`, `database=studable`)
+- `redis:7-alpine` on `localhost:6379`
+
+To stop:
+```bash
+docker compose down
+```
 
 ---
 
