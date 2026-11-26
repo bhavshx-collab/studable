@@ -24,6 +24,9 @@ python-jose[cryptography]==3.3.0
 # Rate limiting
 slowapi==0.1.9
 
+# Email delivery
+aiosmtplib==3.0.2
+
 # Redis (presence engine)
 redis[hiredis]==5.2.1
 

@@ -71,15 +71,31 @@ async def send_message(
     conversation_id: str,
     sender_id: str,
     content: str,
+    client_message_id: Optional[str] = None,
 ) -> Optional[Message]:
     """
     Persist a new message and publish it to both participants.
+    Supports deduplication via client_message_id idempotency key (60s TTL).
     Returns None if the conversation doesn't exist, sender isn't a participant,
     conversation is ended, or either party has blocked the other.
     """
     content = content.strip()
     if not content or len(content) > MAX_MESSAGE_LENGTH:
         return None
+
+    # Idempotent deduplication check
+    if client_message_id:
+        dedup_key = f"msg:dedup:{sender_id}:{client_message_id}"
+        try:
+            cached_id = await redis.get(dedup_key)
+            if cached_id:
+                if isinstance(cached_id, bytes):
+                    cached_id = cached_id.decode("utf-8")
+                existing = db.get(Message, cached_id)
+                if existing:
+                    return existing
+        except Exception:
+            pass
 
     conv = db.get(Conversation, conversation_id)
     if conv is None or not _is_participant(conv, sender_id):
@@ -102,6 +118,12 @@ async def send_message(
     db.commit()
     db.refresh(msg)
 
+    if client_message_id:
+        try:
+            await redis.set(dedup_key, msg.id, ex=60)
+        except Exception:
+            pass
+
     event = {
         "type": "message.new",
         "conversation_id": conversation_id,
@@ -118,6 +140,35 @@ async def send_message(
         await publish_to_user(redis, peer_id, event)
 
     return msg
+
+
+async def mark_message_delivered(
+    db: Session,
+    redis: Redis,
+    conversation_id: str,
+    message_id: str,
+    recipient_id: str,
+) -> bool:
+    """
+    Mark a message as 'delivered' when received by recipient.
+    Publishes a message.delivered event to the sender.
+    """
+    msg = db.get(Message, message_id)
+    if msg is None or msg.conversation_id != conversation_id:
+        return False
+    if msg.sender_id == recipient_id:
+        return False
+    if msg.status == "sent":
+        msg.status = "delivered"
+        db.commit()
+        if msg.sender_id:
+            await publish_to_user(redis, msg.sender_id, {
+                "type": "message.delivered",
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+            })
+        return True
+    return False
 
 
 async def mark_messages_read(

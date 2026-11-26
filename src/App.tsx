@@ -38,6 +38,8 @@ import { matchingWs } from './services/matchingService';
 import {
   blockUserApi,
   endConversationApi,
+  getConversationMessagesApi,
+  getConversationsApi,
   messagingWs,
   reportUserApi,
   sendMessageApi,
@@ -99,9 +101,22 @@ function AppRoutes() {
       .then((profile) => {
         if (isMounted && profile) {
           setCurrentUser(profile);
+          setMessagesByPeer({});
           presenceWs.connect();
           matchingWs.connect();
           messagingWs.connect();
+          getConversationsApi().then((convs) => {
+            convs.forEach((c) => {
+              const peerId = c.participant_a === profile.id ? c.participant_b : c.participant_a;
+              if (peerId) {
+                getConversationMessagesApi(c.id).then((msgs) => {
+                  if (isMounted && msgs.length > 0) {
+                    setMessagesByPeer((prev) => ({ ...prev, [peerId]: msgs }));
+                  }
+                });
+              }
+            });
+          });
           getLiveOnlineCount().then((count) => {
             if (isMounted && count !== null) {
               setLiveOnlineCount(count);
@@ -269,7 +284,10 @@ function AppRoutes() {
         onComplete={(profile, email) => {
           setCurrentUser(profile);
           setAccountSettings((prev) => ({ ...prev, email }));
+          setMessagesByPeer({});
           presenceWs.connect();
+          matchingWs.connect();
+          messagingWs.connect();
           getLiveOnlineCount().then((count) => {
             if (count !== null) setLiveOnlineCount(count);
           });

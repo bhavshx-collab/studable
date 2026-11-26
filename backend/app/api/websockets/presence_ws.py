@@ -135,6 +135,12 @@ async def presence_websocket(
         await websocket.close(code=1008, reason="Invalid or expired ticket/token")
         return
 
+    origin = websocket.headers.get("origin")
+    if origin and settings.ENVIRONMENT == "production":
+        if origin not in settings.CORS_ORIGINS:
+            await websocket.close(code=1008, reason="Origin not allowed")
+            return
+
     # ── 2. Accept connection ──────────────────────────────────────────────────
     await websocket.accept()
     session_id = secrets.token_hex(16)

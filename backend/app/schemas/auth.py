@@ -37,6 +37,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: Annotated[str, Field(min_length=8, max_length=128)]
     display_name: Annotated[str, Field(min_length=1, max_length=80)]
+    age: int | None = Field(None, description="Age in years (must be at least 13)")
 
     @field_validator("username")
     @classmethod
@@ -52,6 +53,13 @@ class RegisterRequest(BaseModel):
     @classmethod
     def validate_password(cls, v: str) -> str:
         return _validate_password_strength(v)
+
+    @field_validator("age")
+    @classmethod
+    def validate_age(cls, v: int | None) -> int | None:
+        if v is not None and v < 13:
+            raise ValueError("You must be at least 13 years old to use Studable.")
+        return v
 
 
 class RegisterResponse(BaseModel):

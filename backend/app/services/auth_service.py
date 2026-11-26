@@ -185,6 +185,31 @@ def logout_user(raw_refresh: str | None, db: Session) -> None:
         db.commit()
 
 
+async def revoke_all_user_sessions(user_id: str, db: Session, redis: Any = None) -> int:
+    """
+    Revoke all active refresh tokens and presence sessions for a user.
+    Used on password change, password reset, account suspension, or explicit logout-all.
+    """
+    from sqlalchemy import update
+    result = db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user_id, RefreshToken.revoked == False)
+        .values(revoked=True)
+    )
+    db.commit()
+    count = result.rowcount
+
+    if redis is not None:
+        try:
+            await redis.delete(f"presence:user:{user_id}:sessions")
+            await redis.set(f"presence:user:{user_id}:state", "OFFLINE")
+            await redis.publish(f"channel:user:{user_id}", '{"type": "auth.session_revoked"}')
+        except Exception as exc:
+            logger.warning("Could not clear Redis sessions on revocation: %s", exc)
+
+    return count
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _create_refresh_token(db: Session, user: User) -> tuple[str, RefreshToken]:

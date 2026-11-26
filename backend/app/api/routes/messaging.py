@@ -32,6 +32,7 @@ from app.services.messaging_service import (
     get_message_history,
     get_unread_count,
     list_conversations,
+    mark_message_delivered,
     mark_messages_read,
     publish_typing,
     send_message,
@@ -90,6 +91,7 @@ class ConversationOut(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
+    client_message_id: Optional[str] = None
 
 
 class TypingRequest(BaseModel):
@@ -149,13 +151,32 @@ async def send_message_rest(
     db: Session = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ) -> MessageOut:
-    msg = await send_message(db, redis, conversation_id, current_user.id, body.content)
+    msg = await send_message(
+        db,
+        redis,
+        conversation_id,
+        current_user.id,
+        body.content,
+        client_message_id=body.client_message_id,
+    )
     if msg is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Cannot send message: conversation not found, ended, or blocked",
         )
     return MessageOut.from_orm_obj(msg)
+
+
+@router.post("/{conversation_id}/messages/{message_id}/delivered", summary="Acknowledge message delivery")
+async def message_delivered(
+    conversation_id: str,
+    message_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    ok = await mark_message_delivered(db, redis, conversation_id, message_id, current_user.id)
+    return {"delivered": ok}
 
 
 @router.post("/{conversation_id}/read", summary="Mark all messages as read")

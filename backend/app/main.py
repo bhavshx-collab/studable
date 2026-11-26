@@ -28,6 +28,9 @@ from app.api.routes import user_settings as user_settings_router
 from app.api.websockets import presence_ws
 from app.api.websockets import matching_ws
 from app.api.websockets import messaging_ws
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.core.limiter import limiter
 from app.workers.matching_worker import matching_worker_loop
 
 logging.basicConfig(
@@ -40,13 +43,30 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description=(
-        "**Studable API** â€” Social Connection & Networking Platform backend.\n\n"
+        "**Studable API** — Social Connection & Networking Platform backend.\n\n"
         "Connect. Discover. Grow."
     ),
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
+# Attach slowapi rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# Security headers middleware
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if settings.ENVIRONMENT == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # Background matching worker task handle
 _worker_task: Optional[asyncio.Task] = None

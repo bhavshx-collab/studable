@@ -21,8 +21,9 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db
 from app.core.redis import get_redis
-from app.core.security import hash_password
 from app.models.user import User
+from app.services.auth_service import revoke_all_user_sessions
+from redis.asyncio import Redis
 
 router = APIRouter(tags=["User Settings"])
 
@@ -67,9 +68,10 @@ def update_privacy(
 # ── Account deletion (soft-delete) ────────────────────────────────────────────
 
 @router.delete("/users/me", summary="Delete own account (soft-delete)")
-def delete_account(
+async def delete_account(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> dict:
     current_user.deleted_at = datetime.now(timezone.utc)
     # Anonymise PII
@@ -77,4 +79,5 @@ def delete_account(
     current_user.username = f"deleted_{current_user.id[:8]}"
     current_user.password_hash = "DELETED"
     db.commit()
+    await revoke_all_user_sessions(current_user.id, db, redis)
     return {"deleted": True}

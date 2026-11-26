@@ -52,6 +52,11 @@ from app.services.auth_service import (
     logout_user,
     refresh_access_token,
     register_user,
+    revoke_all_user_sessions,
+)
+from app.services.email_service import (
+    send_password_reset_email,
+    send_verification_email,
 )
 
 logger = logging.getLogger(__name__)
@@ -172,12 +177,13 @@ def me(user=Depends(get_current_user)) -> UserMeResponse:
     response_model=None,
     summary="Change your password",
 )
-def change_password(
+async def change_password(
     payload: ChangePasswordRequest,
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
+    redis: Redis = Depends(get_redis),
 ) -> None:
-    """Verify the current password and update to a new one."""
+    """Verify the current password and update to a new one, revoking old sessions."""
     if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -185,6 +191,24 @@ def change_password(
         )
     user.password_hash = hash_password(payload.new_password)
     db.commit()
+    await revoke_all_user_sessions(user.id, db, redis)
+
+
+# ── POST /logout-all ──────────────────────────────────────────────────────────
+
+@router.post(
+    "/logout-all",
+    summary="Log out of all devices and active sessions",
+)
+async def logout_all(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    count = await revoke_all_user_sessions(current_user.id, db, redis)
+    clear_refresh_cookie(response)
+    return {"revoked_sessions": count}
 
 
 # ── POST /verify-email ────────────────────────────────────────────────────────
@@ -252,6 +276,8 @@ async def resend_verification(
     except Exception:
         pass
 
+    await send_verification_email(user.email, token)
+
     return {
         "detail": "If that email is registered, a verification link has been sent.",
         "dev_token": token,
@@ -283,6 +309,8 @@ async def forgot_password(
         await redis.set(key, user.id, ex=900)
     except Exception:
         pass
+
+    await send_password_reset_email(user.email, token)
 
     return {
         "detail": "If that email exists, a reset link has been sent.",
@@ -323,5 +351,7 @@ async def reset_password(
         await redis.delete(key)
     except Exception:
         pass
+
+    await revoke_all_user_sessions(user.id, db, redis)
 
     return {"detail": "Password updated successfully"}

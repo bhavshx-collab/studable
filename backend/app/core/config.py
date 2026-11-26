@@ -1,5 +1,5 @@
-"""
-Studable API — Centralized configuration.
+﻿"""
+Studable API â€” Centralized configuration.
 
 All settings are loaded from environment variables (or a .env file).
 No secrets are hardcoded here; defaults are safe for local development only.
@@ -18,24 +18,24 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application-wide settings loaded from environment variables."""
 
-    # ── Application ──────────────────────────────────────────────────────────
+    # â”€â”€ Application â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     APP_NAME: str = "Studable API"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"  # development | staging | production
 
-    # ── Database ─────────────────────────────────────────────────────────────
+    # â”€â”€ Database â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     DATABASE_URL: str = (
         "postgresql+psycopg://postgres:postgres@localhost:5432/studable"
     )
 
-    # ── CORS ─────────────────────────────────────────────────────────────────
+    # â”€â”€ CORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
     ]
 
-    # ── JWT ───────────────────────────────────────────────────────────────────
+    # â”€â”€ JWT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # In production, set JWT_SECRET_KEY to a securely generated 32-byte hex string.
     # e.g.: python -c "import secrets; print(secrets.token_hex(32))"
     JWT_SECRET_KEY: str = ""   # Must be overridden in production via env
@@ -43,12 +43,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
-    # ── Cookies ───────────────────────────────────────────────────────────────
+    # â”€â”€ Cookies â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     REFRESH_COOKIE_NAME: str = "studable_refresh"
     REFRESH_COOKIE_SECURE: bool = False   # Set True in production (HTTPS only)
     REFRESH_COOKIE_SAMESITE: str = "strict"
 
-    # ── Redis / Presence ──────────────────────────────────────────────────────
+    # â”€â”€ Redis / Presence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     REDIS_URL: str = "redis://localhost:6379/0"
     # How long (seconds) a presence key survives without a heartbeat.
     PRESENCE_TTL_SECONDS: int = 60
@@ -57,8 +57,26 @@ class Settings(BaseSettings):
     # Seconds to wait after last session closes before marking user OFFLINE.
     PRESENCE_SESSION_CLEANUP_DELAY: int = 5
 
-    # ── Admin ─────────────────────────────────────────────────────────────────
+    # â”€â”€ Admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     ADMIN_EMAIL: str = "admin@studable.app"
+    FRONTEND_URL: str = "http://localhost:5173"
+
+    # Email / SMTP
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_TLS: bool = True
+    EMAILS_FROM_EMAIL: str = "noreply@studable.app"
+    EMAILS_FROM_NAME: str = "Studable"
+
+    # Rate Limits (slowapi)
+    RATE_LIMIT_AUTH: str = "20/minute"
+    RATE_LIMIT_MESSAGING: str = "60/minute"
+    RATE_LIMIT_DEFAULT: str = "120/minute"
+
+    # WebSocket Security
+    WS_MAX_CONNECTIONS_PER_USER: int = 5
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -86,5 +104,6 @@ class Settings(BaseSettings):
     )
 
 
-# Singleton instance — import this everywhere.
+# Singleton instance â€” import this everywhere.
 settings = Settings()
+

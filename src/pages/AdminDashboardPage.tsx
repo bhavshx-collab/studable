@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Ban,
@@ -10,7 +10,12 @@ import {
 import { ModerationReport, UserProfile } from '../types/domain';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { resolveReportApi, suspendUserApi, unsuspendUserApi } from '../services/messagingService';
+import {
+  getAdminReportsApi,
+  resolveReportApi,
+  suspendUserApi,
+  unsuspendUserApi,
+} from '../services/messagingService';
 
 interface AdminDashboardPageProps {
   reports: ModerationReport[];
@@ -28,11 +33,22 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   onUpdateReportStatus,
   onExitAdmin,
 }) => {
+  const [liveReports, setLiveReports] = useState<ModerationReport[]>(reports);
   const [query, setQuery] = useState('');
   const [suspendedIds, setSuspendedIds] = useState<string[]>([]);
   const [history, setHistory] = useState<string[]>([
     'Issued formal warning to Dev P. (rep_900) · Yesterday',
   ]);
+
+  useEffect(() => {
+    getAdminReportsApi()
+      .then((data) => {
+        if (data && data.length > 0) {
+          setLiveReports(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleReportAction = (
     report: ModerationReport,
@@ -40,6 +56,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   ) => {
     onUpdateReportStatus(report.id, action);
     resolveReportApi(report.id, action).catch(() => {});
+    setLiveReports((prev) =>
+      prev.map((r) => (r.id === report.id ? { ...r, status: action } : r))
+    );
     if (action === 'resolved_suspended') {
       setSuspendedIds((prev) =>
         prev.includes(report.reportedUserId)
@@ -80,7 +99,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       u.category.toLowerCase().includes(query.toLowerCase())
   );
 
-  const pendingCount = reports.filter((r) => r.status === 'pending').length;
+  const pendingCount = liveReports.filter((r) => r.status === 'pending').length;
 
   return (
     <div className="min-h-screen bg-[#0B0D14] text-[#F5F6FA]">
@@ -133,7 +152,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           {/* Report Management Queue */}
           <div className="lg:col-span-7 space-y-4">
             <h2 className="text-base font-semibold">Report Management Queue</h2>
-            {reports.map((rep) => (
+            {liveReports.map((rep) => (
               <Card key={rep.id} className="space-y-3 p-5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-sm">

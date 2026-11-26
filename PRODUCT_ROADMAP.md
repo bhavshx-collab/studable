@@ -1,5 +1,5 @@
 # PRODUCT ROADMAP — STUDABLE
-> **Status:** Phases 0, 1, 2, 3, 4, 5, 6, 7 Completed | Phase 8 Pending Approval  
+> **Status:** Phases 0–8 Completed | Phase 9 Pending  
 > **Last updated:** November 2026
 
 ---
@@ -71,44 +71,57 @@ This roadmap defines the development sequence for Studable from its initial fron
 - User privacy settings (`show_online_status`, `allow_random_discovery`) and GDPR-compliant soft-deletion (`DELETE /api/v1/users/me`).
 - Comprehensive test coverage: 171/171 backend tests passing.
 
-### Phase 8 — Discovery & Recommendations (PENDING)
+### Phase 8 — Production Readiness & Deployment (COMPLETED)
+- Full-stack security gap remediation:
+  - Age gating & COPPA compliance (minimum age 13 enforcement).
+  - Message deduplication with Redis idempotency caching and client message ID tracking.
+  - Delivery receipt tracking (`message.delivered`) across REST and WebSockets.
+  - Origin verification and concurrent connection limits on WebSockets (`WS_MAX_CONNECTIONS_PER_USER=3`).
+  - Privacy enforcement for hidden presence and random discovery filters.
+  - Global session revocation (`revoke_all_user_sessions`) across PostgreSQL and Redis.
+  - Security headers middleware and `slowapi` rate limiting.
+- Asynchronous SMTP transactional email service (`aiosmtplib`).
+- End-to-end two-user lifecycle automated integration test (`test_two_user_e2e.py`).
+- 184/184 backend tests passing (100% pass rate).
+- Production deployment configurations: `Dockerfile`, `docker-compose.prod.yml`, `render.yaml`, `railway.json`, `.github/workflows/ci.yml`, and `vercel.json`.
+- Legal and compliance policies: `PRIVACY_POLICY.md`, `TERMS_OF_SERVICE.md`, and `COMMUNITY_GUIDELINES.md`.
+- Comprehensive `DEPLOYMENT_GUIDE.md` and `PHASE_8_REPORT.md`.
+
+### Phase 9 — Discovery, Recommendations & Post-Launch Growth (PENDING)
 - Shared interest graph recommendations.
 - Trending discussion topics aggregation.
-
-### Phase 9 — Production Launch Readiness (PENDING)
-- End-to-end integration testing.
-- Rate limiting, CSRF protection, and Content Security Policy.
-- Docker containers and production deployment.
+- Mobile push notifications (Web Push / FCM).
+- Audio/video networking rooms (WebRTC).
 
 ---
 
 ## IMPLEMENTATION DEPENDENCY GRAPH
 
 ```
-Phase 0 (Hardening) [ACTIVE]
+Phase 0 (Hardening) [COMPLETED]
        │
        ▼
-Phase 1 (Auth & DB Foundation)
+Phase 1 (Auth & DB Foundation) [COMPLETED]
        │
        ▼
-Phase 2 (Profiles & Settings)
+Phase 2 & 3 (Profiles & Auth) [COMPLETED]
       / \
      /   \
     ▼     ▼
-Phase 3  Phase 4 (Matching Engine)
-(Conns)   │
-    │     ▼
-    │    Phase 5 (Real-time Chat)
-    │     │
-    ▼     ▼
-Phase 6 (Notifications)
+Phase 4 (Presence Engine) [COMPLETED]
     │
     ▼
-Phase 7 (Safety & Moderation)
+Phase 5 (Matching Engine) [COMPLETED]
     │
     ▼
-Phase 8 (Discovery)
+Phase 6 (Real-time Chat) [COMPLETED]
     │
     ▼
-Phase 9 (Production Hardening)
+Phase 7 (Safety & Moderation) [COMPLETED]
+    │
+    ▼
+Phase 8 (Production Readiness & Deployment) [COMPLETED]
+    │
+    ▼
+Phase 9 (Discovery & Recommendations) [PENDING]
 ```

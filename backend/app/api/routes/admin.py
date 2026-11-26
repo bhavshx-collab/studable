@@ -23,6 +23,9 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db, require_admin
+from app.core.redis import get_redis
+from app.services.auth_service import revoke_all_user_sessions
+from redis.asyncio import Redis
 from app.models.conversation import Conversation
 from app.models.match_request import MatchRequest
 from app.models.report import Report
@@ -94,11 +97,12 @@ def list_reports(
 
 
 @router.post("/reports/{report_id}/resolve", summary="Resolve a report")
-def resolve_report(
+async def resolve_report(
     report_id: str,
     body: ResolveReportRequest,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> dict:
     if body.action not in VALID_RESOLVE_ACTIONS:
         raise HTTPException(
@@ -115,11 +119,12 @@ def resolve_report(
     report.moderator_id = admin.id
     report.resolved_at = datetime.now(timezone.utc)
 
-    # Auto-suspend on resolved_suspended
+    # Auto-suspend and revoke sessions on resolved_suspended
     if body.action == "resolved_suspended" and report.reported_user_id:
         target = db.get(User, report.reported_user_id)
         if target:
             target.is_suspended = True
+            await revoke_all_user_sessions(report.reported_user_id, db, redis)
 
     db.commit()
     return {"resolved": True, "action": body.action}
@@ -157,10 +162,11 @@ def list_users(
 
 
 @router.post("/users/{user_id}/suspend", summary="Suspend a user")
-def suspend_user(
+async def suspend_user(
     user_id: str,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> dict:
     target = db.get(User, user_id)
     if target is None or target.deleted_at is not None:
@@ -169,6 +175,7 @@ def suspend_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot suspend yourself")
     target.is_suspended = True
     db.commit()
+    await revoke_all_user_sessions(user_id, db, redis)
     return {"suspended": True}
 
 

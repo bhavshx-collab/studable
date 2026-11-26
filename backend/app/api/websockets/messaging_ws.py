@@ -40,6 +40,7 @@ from app.core.security import decode_access_token
 from app.services.messaging_service import (
     end_conversation,
     get_conversation_or_none,
+    mark_message_delivered,
     mark_messages_read,
     publish_typing,
     send_message,
@@ -82,6 +83,24 @@ async def messaging_websocket(
     if not user_id:
         await websocket.close(code=1008)
         return
+
+    # Origin verification in production
+    origin = websocket.headers.get("origin")
+    if origin and settings.ENVIRONMENT == "production":
+        if origin not in settings.CORS_ORIGINS:
+            await websocket.close(code=1008)
+            return
+
+    # Concurrency limit check
+    active_key = f"ws:active:messaging:{user_id}"
+    try:
+        active_count = await redis.incr(active_key)
+        if active_count > settings.WS_MAX_CONNECTIONS_PER_USER:
+            await redis.decr(active_key)
+            await websocket.close(code=1008)
+            return
+    except Exception:
+        pass
 
     await websocket.accept()
     await websocket.send_text(json.dumps({"type": "messaging.connected", "user_id": user_id}))
@@ -141,13 +160,21 @@ async def messaging_websocket(
             elif msg_type == "message.send":
                 conv_id = msg.get("conversation_id", "")
                 content = msg.get("content", "")
+                client_msg_id = msg.get("client_message_id")
                 if not conv_id or not content:
                     await websocket.send_text(json.dumps({"type": "error", "code": "MISSING_FIELDS", "detail": "conversation_id and content required"}))
                     continue
                 async with _db_session() as db:
-                    result = await send_message(db, redis, conv_id, user_id, content)
+                    result = await send_message(db, redis, conv_id, user_id, content, client_message_id=client_msg_id)
                 if result is None:
                     await websocket.send_text(json.dumps({"type": "error", "code": "SEND_FAILED", "detail": "Could not send message"}))
+
+            elif msg_type == "message.delivered":
+                conv_id = msg.get("conversation_id", "")
+                mid = msg.get("message_id", "")
+                if conv_id and mid:
+                    async with _db_session() as db:
+                        await mark_message_delivered(db, redis, conv_id, mid, user_id)
 
             elif msg_type in ("typing.start", "typing.stop"):
                 conv_id = msg.get("conversation_id", "")
@@ -176,6 +203,10 @@ async def messaging_websocket(
         logger.warning("Messaging WS error for user %s: %s", user_id, exc)
     finally:
         forwarder_task.cancel()
+        try:
+            await redis.decr(active_key)
+        except Exception:
+            pass
         try:
             await pubsub.unsubscribe(_USER_CHANNEL.format(user_id))
             await pubsub.aclose()

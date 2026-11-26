@@ -67,6 +67,12 @@ async def matching_websocket(
         await websocket.close(code=1008, reason="Invalid or expired ticket/token")
         return
 
+    origin = websocket.headers.get("origin")
+    if origin and settings.ENVIRONMENT == "production":
+        if origin not in settings.CORS_ORIGINS:
+            await websocket.close(code=1008, reason="Origin not allowed")
+            return
+
     # ── 2. Accept & Initial State Snapshot ────────────────────────────────────
     await websocket.accept()
     logger.info("Matching WS connected: user=%s", user_id)

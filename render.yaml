@@ -1,0 +1,69 @@
+services:
+  # ── FastAPI Backend Web Service ──────────────────────────────────────────────
+  - type: web
+    name: studable-api
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: studable-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: studable-redis
+          property: connectionString
+      - key: FRONTEND_URL
+        value: https://studable.vercel.app
+      - key: SECRET_KEY
+        generateValue: true
+      - key: REFRESH_SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: '["https://studable.vercel.app"]'
+
+  # ── Background Matching Worker Service ───────────────────────────────────────
+  - type: worker
+    name: studable-matching-worker
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    region: oregon
+    autoDeploy: true
+    dockerCommand: python -m app.workers.matching_worker
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: studable-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: studable-redis
+          property: connectionString
+
+databases:
+  # ── Managed PostgreSQL ───────────────────────────────────────────────────────
+  - name: studable-db
+    plan: starter
+    region: oregon
+    databaseName: studable
+    user: studable_user
+
+  # ── Managed Redis ────────────────────────────────────────────────────────────
+  - name: studable-redis
+    type: redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: noeviction
