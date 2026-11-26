@@ -1,5 +1,5 @@
 # PRODUCT ROADMAP — STUDABLE
-> **Status:** Phases 0, 1, 2, 3, 4, 5 Completed | Phase 6 Pending Approval  
+> **Status:** Phases 0, 1, 2, 3, 4, 5, 6, 7 Completed | Phase 8 Pending Approval  
 > **Last updated:** November 2026
 
 ---
@@ -51,26 +51,31 @@ This roadmap defines the development sequence for Studable from its initial fron
 - Real-time WebSocket matching channel (`/api/v1/ws/matching`) and REST matching endpoints.
 - Frontend `matchingService.ts` and interactive lobby UI integration with countdown and mutual handshake.
 
-### Phase 6 — Real-time 1-on-1 Messaging (NEXT)
-- WebSocket conversation gateway.
-- Real-time message exchange, delivery status, typing indicators.
-- Persistent conversation history in PostgreSQL.
+### Phase 6 — Real-Time 1-on-1 Messaging (COMPLETED)
+- Automatic conversation activation upon mutual match acceptance.
+- Real-time 1-on-1 messaging WebSocket gateway (`/api/v1/ws/messaging`) with ticket authentication.
+- Multi-worker event delivery via Redis Pub/Sub (`message.new`, `message.read`, `typing.start`, `typing.stop`, `conversation.ended`).
+- Message persistence in PostgreSQL with status tracking (`sent`, `delivered`, `read`).
+- Paginated message history with cursor (`before_id`), unread counter, and conversation termination.
+- Bidirectional blocking enforcement at the message delivery layer.
+- Frontend `messagingService.ts` integrated with `ChatPage` and `App.tsx`.
 
-### Phase 6 — Notification System
-- Notification center API and models.
-- Push/WebSocket real-time notification delivery.
-- Unread badge counter synchronization.
+### Phase 7 — Safety, Moderation, Privacy & Verification (COMPLETED)
+- Bidirectional blocking system with mutual exclusion in matching and messaging.
+- User reporting with categorized reasons and conversation context.
+- Secure Admin moderation REST endpoints (`/api/v1/admin/reports`, `/api/v1/admin/users`, `/api/v1/admin/metrics`).
+- Report resolution workflows and automated/manual user suspensions.
+- Rate limiting and input validation for spam prevention.
+- Redis-backed password reset tokens (`/api/v1/auth/forgot-password`, `/api/v1/auth/reset-password`).
+- Email verification token workflows.
+- User privacy settings (`show_online_status`, `allow_random_discovery`) and GDPR-compliant soft-deletion (`DELETE /api/v1/users/me`).
+- Comprehensive test coverage: 171/171 backend tests passing.
 
-### Phase 7 — Trust & Safety
-- Reporting system with categorized reasons and notes.
-- User blocking and mutual exclusion in matching queues.
-- Admin moderation dashboard with real database backing.
-
-### Phase 8 — Discovery & Recommendations
+### Phase 8 — Discovery & Recommendations (PENDING)
 - Shared interest graph recommendations.
 - Trending discussion topics aggregation.
 
-### Phase 9 — Production Launch Readiness
+### Phase 9 — Production Launch Readiness (PENDING)
 - End-to-end integration testing.
 - Rate limiting, CSRF protection, and Content Security Policy.
 - Docker containers and production deployment.

@@ -27,6 +27,7 @@ interface ChatPageProps {
   onReportUser: (peer: UserProfile, reason: string, details: string) => void;
   onViewPeerProfile: (peer: UserProfile) => void;
   onSkipToLobby: () => void;
+  onEndConversation?: (peer: UserProfile) => void;
 }
 
 export const ChatPage: React.FC<ChatPageProps> = ({
@@ -42,6 +43,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   onReportUser,
   onViewPeerProfile,
   onSkipToLobby,
+  onEndConversation,
 }) => {
   const [draft, setDraft] = useState('');
   const [ended, setEnded] = useState(false);
@@ -151,7 +153,14 @@ export const ChatPage: React.FC<ChatPageProps> = ({
           </Button>
 
           {!ended && (
-            <Button size="sm" variant="danger" onClick={() => setEnded(true)}>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => {
+                setEnded(true);
+                onEndConversation?.(peer);
+              }}
+            >
               <PhoneOff className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">End Conversation</span>
             </Button>

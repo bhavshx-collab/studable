@@ -1,5 +1,5 @@
 """
-Studable API — FastAPI application entry point.
+Studable API â€” FastAPI application entry point.
 """
 
 from __future__ import annotations
@@ -20,13 +20,19 @@ from app.api.routes import auth as auth_router
 from app.api.routes import presence as presence_router
 from app.api.routes import ws_ticket
 from app.api.routes import matching as matching_router
+from app.api.routes import messaging as messaging_router
+from app.api.routes import blocks as blocks_router
+from app.api.routes import reports as reports_router
+from app.api.routes import admin as admin_router
+from app.api.routes import user_settings as user_settings_router
 from app.api.websockets import presence_ws
 from app.api.websockets import matching_ws
+from app.api.websockets import messaging_ws
 from app.workers.matching_worker import matching_worker_loop
 
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
-    format="%(asctime)s | %(levelname)-8s | %(name)s — %(message)s",
+    format="%(asctime)s | %(levelname)-8s | %(name)s â€” %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -34,7 +40,7 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description=(
-        "**Studable API** — Social Connection & Networking Platform backend.\n\n"
+        "**Studable API** â€” Social Connection & Networking Platform backend.\n\n"
         "Connect. Discover. Grow."
     ),
     docs_url="/docs",
@@ -46,7 +52,7 @@ app = FastAPI(
 _worker_task: Optional[asyncio.Task] = None
 
 
-# ── Lifespan events ───────────────────────────────────────────────────────────
+# â”€â”€ Lifespan events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 @app.on_event("startup")
@@ -75,7 +81,7 @@ async def on_shutdown() -> None:
     logger.info("Studable API shutdown complete.")
 
 
-# ── Exception handlers ────────────────────────────────────────────────────────
+# â”€â”€ Exception handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.exception_handler(OperationalError)
 async def db_operational_error_handler(request: Request, exc: OperationalError) -> JSONResponse:
     logger.error("Database connection error on %s: %s", request.url.path, exc)
@@ -85,7 +91,7 @@ async def db_operational_error_handler(request: Request, exc: OperationalError) 
     )
 
 
-# ── CORS ─────────────────────────────────────────────────────────────────────
+# â”€â”€ CORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -94,19 +100,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routers ───────────────────────────────────────────────────────────────────
+# â”€â”€ Routers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth_router.router, prefix="/api/v1")
 app.include_router(presence_router.router, prefix="/api/v1")
 app.include_router(ws_ticket.router, prefix="/api/v1")
 app.include_router(matching_router.router, prefix="/api/v1")
+app.include_router(messaging_router.router, prefix="/api/v1")
+app.include_router(blocks_router.router, prefix="/api/v1")
+app.include_router(reports_router.router, prefix="/api/v1")
+app.include_router(admin_router.router, prefix="/api/v1")
+app.include_router(user_settings_router.router, prefix="/api/v1")
 
-# ── WebSockets ────────────────────────────────────────────────────────────────
+# â”€â”€ WebSockets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.include_router(presence_ws.router, prefix="/api/v1")
 app.include_router(matching_ws.router, prefix="/api/v1")
+app.include_router(messaging_ws.router, prefix="/api/v1")
 
 
-# ── Root ─────────────────────────────────────────────────────────────────────
+# â”€â”€ Root â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.get("/", tags=["Root"], summary="API root")
 def root() -> dict:
     return {
@@ -114,3 +126,4 @@ def root() -> dict:
         "version": settings.APP_VERSION,
         "docs": "/docs",
     }
+

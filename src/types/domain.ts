@@ -89,7 +89,7 @@ export interface ChatMessage {
   senderId: string;
   content: string;
   createdAt: string;
-  status?: 'sent' | 'delivered';
+  status?: 'sent' | 'delivered' | 'read';
 }
 
 export interface ConnectionRecord {

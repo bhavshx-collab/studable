@@ -10,6 +10,7 @@ import {
 import { ModerationReport, UserProfile } from '../types/domain';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { resolveReportApi, suspendUserApi, unsuspendUserApi } from '../services/messagingService';
 
 interface AdminDashboardPageProps {
   reports: ModerationReport[];
@@ -38,6 +39,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     action: 'resolved_suspended' | 'dismissed'
   ) => {
     onUpdateReportStatus(report.id, action);
+    resolveReportApi(report.id, action).catch(() => {});
     if (action === 'resolved_suspended') {
       setSuspendedIds((prev) =>
         prev.includes(report.reportedUserId)
@@ -58,6 +60,11 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   const toggleUserSuspension = (user: UserProfile) => {
     const isSuspended = suspendedIds.includes(user.id);
+    if (isSuspended) {
+      unsuspendUserApi(user.id).catch(() => {});
+    } else {
+      suspendUserApi(user.id).catch(() => {});
+    }
     setSuspendedIds((prev) =>
       isSuspended ? prev.filter((id) => id !== user.id) : [...prev, user.id]
     );

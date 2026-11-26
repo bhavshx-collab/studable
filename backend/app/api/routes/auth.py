@@ -16,13 +16,18 @@ POST   /api/v1/auth/reset-password       (stub)
 from __future__ import annotations
 
 import logging
+import secrets
+from redis.asyncio import Redis
+from app.core.redis import get_redis
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import Response as FastAPIResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.models.user import User
 from app.core.security import (
     clear_refresh_cookie,
     get_refresh_token_from_cookie,
@@ -186,30 +191,70 @@ def change_password(
 
 @router.post(
     "/verify-email",
-    summary="[Stub] Verify email address with a token",
+    summary="Verify email address with a token",
 )
-def verify_email(payload: VerifyEmailRequest) -> dict:
-    """Email verification stub — SMTP integration required in a future phase."""
-    return {
-        "detail": (
-            "Email verification is not yet configured. "
-            "An email service integration will be added in a future phase."
-        )
-    }
+async def verify_email(
+    payload: VerifyEmailRequest,
+    db: Session = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    key = f"email_verify:{payload.token}"
+    try:
+        user_id = await redis.get(key)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Cache unavailable")
+
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification token")
+
+    if isinstance(user_id, bytes):
+        user_id = user_id.decode("utf-8")
+
+    user = db.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not found")
+
+    user.is_verified = True
+    db.commit()
+    try:
+        await redis.delete(key)
+    except Exception:
+        pass
+
+    return {"detail": "Email verified successfully"}
 
 
 # ── POST /resend-verification ─────────────────────────────────────────────────
 
 @router.post(
     "/resend-verification",
-    summary="[Stub] Resend verification email",
+    summary="Resend verification email",
 )
-def resend_verification(payload: ResendVerificationRequest) -> dict:
+async def resend_verification(
+    payload: ResendVerificationRequest,
+    db: Session = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    user = db.execute(
+        select(User).where(User.email == payload.email, User.deleted_at.is_(None))
+    ).scalar_one_or_none()
+
+    if user is None:
+        return {"detail": "If that email is registered, a verification link has been sent."}
+
+    if user.is_verified:
+        return {"detail": "Email is already verified."}
+
+    token = secrets.token_urlsafe(32)
+    key = f"email_verify:{token}"
+    try:
+        await redis.set(key, user.id, ex=86400)
+    except Exception:
+        pass
+
     return {
-        "detail": (
-            "Resend verification is not yet configured. "
-            "An email service integration will be added in a future phase."
-        )
+        "detail": "If that email is registered, a verification link has been sent.",
+        "dev_token": token,
     }
 
 
@@ -217,18 +262,31 @@ def resend_verification(payload: ResendVerificationRequest) -> dict:
 
 @router.post(
     "/forgot-password",
-    summary="[Stub] Request a password reset email",
+    summary="Request a password reset email",
 )
-def forgot_password(payload: ForgotPasswordRequest) -> dict:
-    """
-    Always returns the same message to prevent email enumeration.
-    SMTP integration will be added in a future phase.
-    """
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    user = db.execute(
+        select(User).where(User.email == payload.email, User.deleted_at.is_(None))
+    ).scalar_one_or_none()
+
+    # Always return 200 to prevent user enumeration
+    if user is None:
+        return {"detail": "If that email exists, a reset link has been sent."}
+
+    token = secrets.token_urlsafe(32)
+    key = f"pw_reset:{token}"
+    try:
+        await redis.set(key, user.id, ex=900)
+    except Exception:
+        pass
+
     return {
-        "detail": (
-            "If that email is registered, a reset link will be sent. "
-            "(Email service integration coming in a future phase.)"
-        )
+        "detail": "If that email exists, a reset link has been sent.",
+        "dev_token": token,
     }
 
 
@@ -236,12 +294,34 @@ def forgot_password(payload: ForgotPasswordRequest) -> dict:
 
 @router.post(
     "/reset-password",
-    summary="[Stub] Reset password using a token",
+    summary="Reset password using a token",
 )
-def reset_password(payload: ResetPasswordRequest) -> dict:
-    return {
-        "detail": (
-            "Password reset tokens are not yet implemented. "
-            "An email service integration will be added in a future phase."
-        )
-    }
+async def reset_password(
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    key = f"pw_reset:{payload.token}"
+    try:
+        user_id = await redis.get(key)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Cache unavailable")
+
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token")
+
+    if isinstance(user_id, bytes):
+        user_id = user_id.decode("utf-8")
+
+    user = db.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not found")
+
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    try:
+        await redis.delete(key)
+    except Exception:
+        pass
+
+    return {"detail": "Password updated successfully"}

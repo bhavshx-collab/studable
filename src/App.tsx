@@ -35,6 +35,13 @@ import { AdminGuard } from './router/AdminGuard';
 import { getMeApi, logoutApi, refreshApi } from './services/authApi';
 import { getLiveOnlineCount, presenceWs } from './services/presenceService';
 import { matchingWs } from './services/matchingService';
+import {
+  blockUserApi,
+  endConversationApi,
+  messagingWs,
+  reportUserApi,
+  sendMessageApi,
+} from './services/messagingService';
 
 const VALID_APP_ROUTES: AppRoute[] = [
   'dashboard',
@@ -94,6 +101,7 @@ function AppRoutes() {
           setCurrentUser(profile);
           presenceWs.connect();
           matchingWs.connect();
+          messagingWs.connect();
           getLiveOnlineCount().then((count) => {
             if (isMounted && count !== null) {
               setLiveOnlineCount(count);
@@ -104,6 +112,31 @@ function AppRoutes() {
       .catch(() => {
         // No active session — stays as default/guest
       });
+
+    const unsubscribeMessaging = messagingWs.subscribe((evt) => {
+      if (evt.type === 'message.new' && evt.message) {
+        const m = evt.message;
+        const senderId = m.sender_id;
+        const chatMsg: ChatMessage = {
+          id: m.id,
+          conversationId: evt.conversation_id,
+          senderId: senderId,
+          content: m.content,
+          createdAt: new Date(m.created_at).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          status: m.status,
+        };
+        setMessagesByPeer((prev) => {
+          const peerId = senderId === currentUser.id ? (activeChatPeer?.id ?? senderId) : senderId;
+          return {
+            ...prev,
+            [peerId]: [...(prev[peerId] ?? []).filter((x) => x.id !== m.id), chatMsg],
+          };
+        });
+      }
+    });
 
     const pollInterval = setInterval(() => {
       getLiveOnlineCount().then((count) => {
@@ -116,8 +149,10 @@ function AppRoutes() {
     return () => {
       isMounted = false;
       clearInterval(pollInterval);
+      unsubscribeMessaging();
       presenceWs.disconnect();
       matchingWs.disconnect();
+      messagingWs.disconnect();
     };
   }, []);
 
@@ -156,6 +191,7 @@ function AppRoutes() {
   };
 
   const handleBlockUser = (peer: UserProfile) => {
+    blockUserApi(peer.id).catch(() => {});
     setBlockedUsers((prev) =>
       prev.some((u) => u.id === peer.id) ? prev : [...prev, peer]
     );
@@ -171,6 +207,7 @@ function AppRoutes() {
     reason: string,
     details = ''
   ) => {
+    reportUserApi(peer.id, reason, details).catch(() => {});
     const newReport: ModerationReport = {
       id: `rep_${Date.now()}`,
       reportedUserId: peer.id,
@@ -185,9 +222,12 @@ function AppRoutes() {
   };
 
   const handleSendMessage = (peerId: string, content: string) => {
+    const convId = `conv_${peerId}`;
+    messagingWs.sendMessage(convId, content);
+    // Optimistic message update
     const msg: ChatMessage = {
       id: `msg_${Date.now()}`,
-      conversationId: `conv_${peerId}`,
+      conversationId: convId,
       senderId: currentUser.id,
       content,
       createdAt: new Date().toLocaleTimeString([], {
@@ -330,6 +370,9 @@ function AppRoutes() {
               onReportUser={handleReportUser}
               onViewPeerProfile={viewPeerProfile}
               onSkipToLobby={() => navigate('/connect')}
+              onEndConversation={(peer) => {
+                endConversationApi(`conv_${peer.id}`).catch(() => {});
+              }}
             />
           ) : (
             <StateView
