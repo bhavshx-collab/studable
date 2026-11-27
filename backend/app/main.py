@@ -85,6 +85,7 @@ async def on_startup() -> None:
         logger.info("Matching background worker task created.")
     except Exception as exc:
         logger.warning("Could not start matching background worker: %s", exc)
+    logger.info("CORS allowed origins: %s", settings.CORS_ORIGINS)
 
 
 @app.on_event("shutdown")

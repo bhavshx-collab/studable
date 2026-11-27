@@ -8,6 +8,7 @@ No secrets are hardcoded here; defaults are safe for local development only.
 from __future__ import annotations
 
 import json
+import logging
 import secrets
 from typing import List
 
@@ -30,10 +31,14 @@ class Settings(BaseSettings):
     )
 
     # â”€â”€ CORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-    ]
+    # Env var: ALLOWED_ORIGINS (Railway) or CORS_ORIGINS
+    # pydantic-settings v2 decodes List[str] as JSON before validators;
+    # keep this as str and parse it in the CORS_ORIGINS property.
+    ALLOWED_ORIGINS: str = (
+        "http://localhost:3000,"
+        "http://localhost:5173,"
+        "https://studable-eight.vercel.app"
+    )
 
     # â”€â”€ JWT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # In production, set JWT_SECRET_KEY to a securely generated 32-byte hex string.
@@ -78,15 +83,6 @@ class Settings(BaseSettings):
     # WebSocket Security
     WS_MAX_CONNECTIONS_PER_USER: int = 5
 
-    @field_validator("CORS_ORIGINS", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, value: object) -> List[str]:
-        if isinstance(value, str):
-            value = value.strip()
-            if value.startswith("["):
-                return json.loads(value)
-            return [o.strip() for o in value.split(",") if o.strip()]
-        return value  # type: ignore[return-value]
 
     @field_validator("JWT_SECRET_KEY", mode="before")
     @classmethod
@@ -95,6 +91,15 @@ class Settings(BaseSettings):
         if not value:
             return secrets.token_hex(32)
         return value
+
+
+    @property
+    def CORS_ORIGINS(self) -> List[str]:
+        """Parse ALLOWED_ORIGINS string into list for the CORS middleware."""
+        raw = self.ALLOWED_ORIGINS.strip()
+        if raw.startswith("["):
+            return json.loads(raw)
+        return [o.strip() for o in raw.split(",") if o.strip()]
 
     model_config = SettingsConfigDict(
         env_file=".env",

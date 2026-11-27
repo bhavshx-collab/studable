@@ -22,11 +22,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app/
 
 # Expose backend port
-EXPOSE 8000
+EXPOSE 8080
 
 # Health check probe
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8080}/api/v1/health || exit 1
 
 # Default command: run FastAPI application with Uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--ws", "websockets"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 2 --ws websockets"]
